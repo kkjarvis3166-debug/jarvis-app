@@ -11,7 +11,7 @@ class FishingApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false, 
-      title: 'Jarvis V61.9',
+      title: 'Jarvis V61.9.1', // 修正版としてマイナーアップデート
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey), useMaterial3: true),
       home: const ResearchPage(),
     );
@@ -70,18 +70,37 @@ class _ResearchPageState extends State<ResearchPage> {
     });
   }
 
+  // --- 修正箇所: iOSでの白画面抑制とURLエンコード対応 ---
   void _search(String t) async {
     String q = _searchController.text.trim();
     if (q.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: q));
-    String url = (t=='maker') ? 'google.com/search?q=$q 定価' : (t=='berry') ? 'google.com/search?q=タックルベリー 在庫 $q' : 'auctions.yahoo.co.jp/closedsearch/closedsearch?p="$q"&va="$q"&istatus=2';
-    html.window.open('https://$url', '_blank');
+    
+    // 検索語句を安全なURL形式に変換
+    final encodedQ = Uri.encodeComponent(q);
+    
+    String url;
+    if (t == 'maker') {
+      url = 'https://www.google.com/search?q=$encodedQ+定価';
+    } else if (t == 'berry') {
+      url = 'https://www.google.com/search?q=タックルベリー+在庫+$encodedQ';
+    } else {
+      url = 'https://auctions.yahoo.co.jp/closedsearch/closedsearch?p="$encodedQ"&va="$encodedQ"&istatus=2';
+    }
+
+    // window.openの代わりにAnchorElementを動的生成してクリック
+    // これによりiOS Safari等の「戻る」挙動が安定し、空タブが残りにくくなります
+    final anchor = html.AnchorElement(href: url)
+      ..target = '_blank'
+      ..rel = 'noopener noreferrer';
+    anchor.click();
   }
+  // --------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('🤖 Jarvis V61.9'), centerTitle: true, toolbarHeight: 34, backgroundColor: Colors.blueGrey[50]),
+      appBar: AppBar(title: const Text('🤖 Jarvis V61.9.1'), centerTitle: true, toolbarHeight: 34, backgroundColor: Colors.blueGrey[50]),
       body: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 600),
@@ -125,12 +144,10 @@ class _ResearchPageState extends State<ResearchPage> {
                   SizedBox(width: 85, child: DropdownButtonFormField<int>(value: _selectedRate, items: [30,35,40,45,50,55,60,70].map((v)=>DropdownMenuItem(value: v, child: Text('$v%'))).toList(), onChanged: (v){setState(()=>_selectedRate=v!);_calc();}, decoration: const InputDecoration(isDense: true, labelText: '買取率', border: OutlineInputBorder()))),
                 ]),
                 const SizedBox(height: 10),
-                // 減額欄の「¥」マークを赤色に修正
                 TextField(controller: _reductionPriceController, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], onChanged: (_)=>_calc(), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 24), decoration: const InputDecoration(labelText: '状態・欠品による減額', prefixText: '¥ ', prefixStyle: TextStyle(color: Colors.red, fontWeight: FontWeight.bold), labelStyle: TextStyle(color: Colors.red), enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.red, width: 2)))),
                 const SizedBox(height: 15),
                 _resCard(),
                 const SizedBox(height: 15),
-                // 利益の枠の高さを統一するための調整
                 IntrinsicHeight(
                   child: Row(
                     children: [
@@ -154,7 +171,6 @@ class _ResearchPageState extends State<ResearchPage> {
   Widget _profCard(String t, int p, double r, int? f, Color c) => Container(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4), decoration: BoxDecoration(border: Border.all(color: c, width: 2), borderRadius: BorderRadius.circular(6)), child: Column(mainAxisSize: MainAxisSize.max, children: [
     Text(t, style: TextStyle(color: c, fontWeight: FontWeight.bold, fontSize: 14)),
     if (f != null) Text('手数料: ¥${_fmt(f)}', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold)),
-    // 手数料がない場合のスペーサー（高さを統一するため）
     if (f == null) const SizedBox(height: 13.0),
     Text('¥${_fmt(p)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: c)),
     Text('粗利率: ${r.toStringAsFixed(1)}%', style: TextStyle(color: c, fontWeight: FontWeight.bold, fontSize: 13)),
