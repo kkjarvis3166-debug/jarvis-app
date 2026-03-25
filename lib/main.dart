@@ -11,7 +11,7 @@ class FishingApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false, 
-      title: 'Jarvis V61.9.3', // 修正版としてマイナーアップデート
+      title: 'Jarvis V61.9.4', // 修正版としてマイナーアップデート
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey), useMaterial3: true),
       home: const ResearchPage(),
     );
