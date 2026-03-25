@@ -119,7 +119,6 @@ class _ResearchPageState extends State<ResearchPage> {
     }
 
     final Uri url = Uri.parse(urlString);
-    // url_launcherを使用してブラウザを開く（Webでもモバイルでも共通の書き方）
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       debugPrint('Could not launch $url');
     }
@@ -129,17 +128,16 @@ class _ResearchPageState extends State<ResearchPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🤖 Jarvis'), // タイトルはスッキリと
+        title: const Text('🤖 Jarvis'),
         centerTitle: true,
         toolbarHeight: 34,
         backgroundColor: Colors.blueGrey[50],
-        // 右端にバージョン番号を控えめに、かつ確認しやすく配置
         actions: const [
           Center(
             child: Padding(
               padding: EdgeInsets.only(right: 16.0),
               child: Text(
-                'V61.9.6',
+                'V61.9.7', // バージョンを7にアップデート
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey,
@@ -245,7 +243,8 @@ class _ResearchPageState extends State<ResearchPage> {
                       width: 85,
                       child: DropdownButtonFormField<int>(
                         value: _selectedRate,
-                        items: [30, 35, 40, 45, 50, 55, 60, 70]
+                        // 買取率のリストに 65 を追加！
+                        items: [30, 35, 40, 45, 50, 55, 60, 65, 70]
                             .map((v) => DropdownMenuItem(
                                 value: v, child: Text('$v%')))
                             .toList(),
