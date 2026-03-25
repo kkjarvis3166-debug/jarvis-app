@@ -14,7 +14,7 @@ class FishingApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Jarvis V61.9.4',
+      title: 'Jarvis',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
         useMaterial3: true,
@@ -129,10 +129,26 @@ class _ResearchPageState extends State<ResearchPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🤖 Jarvis V61.9.4'),
+        title: const Text('🤖 Jarvis'), // タイトルはスッキリと
         centerTitle: true,
         toolbarHeight: 34,
         backgroundColor: Colors.blueGrey[50],
+        // 右端にバージョン番号を控えめに、かつ確認しやすく配置
+        actions: const [
+          Center(
+            child: Padding(
+              padding: EdgeInsets.only(right: 16.0),
+              child: Text(
+                'V61.9.4',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Center(
         child: Container(
