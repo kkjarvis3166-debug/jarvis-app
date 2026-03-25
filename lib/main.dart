@@ -100,7 +100,7 @@ class _ResearchPageState extends State<ResearchPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('🤖 Jarvis V61.9.3'), centerTitle: true, toolbarHeight: 34, backgroundColor: Colors.blueGrey[50]),
+      appBar: AppBar(title: const Text('🤖 Jarvis V61.9.4'), centerTitle: true, toolbarHeight: 34, backgroundColor: Colors.blueGrey[50]),
       body: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 600),
