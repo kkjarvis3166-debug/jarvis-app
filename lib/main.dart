@@ -139,7 +139,7 @@ class _ResearchPageState extends State<ResearchPage> {
             child: Padding(
               padding: EdgeInsets.only(right: 16.0),
               child: Text(
-                'V61.9.4',
+                'V61.9.5',
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey,

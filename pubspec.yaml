@@ -1,18 +1,17 @@
 name: fishing_app
-description: "A new Flutter project."
-publish_to: 'none'
+description: A new Flutter project.
 
+publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.3.4 <4.0.0'
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.6
-  intl: ^0.20.2
-  url_launcher: ^6.2.5  # ブラウザ起動に必須の部品を追加しました
+  url_launcher: ^6.2.0
+  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:
