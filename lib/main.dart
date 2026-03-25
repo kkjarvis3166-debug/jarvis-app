@@ -375,4 +375,10 @@ class _ResearchPageState extends State<ResearchPage> {
             Text('¥${_fmt(p)}',
                 style: TextStyle(
                     fontWeight: FontWeight.bold, fontSize: 20, color: c)),
-            Text('粗利率: ${r.toStringAs
+            Text('粗利率: ${r.toStringAsFixed(1)}%',
+                style: TextStyle(
+                    color: c, fontWeight: FontWeight.bold, fontSize: 13)),
+          ],
+        ),
+      );
+}
