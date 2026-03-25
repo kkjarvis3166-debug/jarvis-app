@@ -11,7 +11,7 @@ class FishingApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false, 
-      title: 'Jarvis V61.9.2', // 修正版としてマイナーアップデート
+      title: 'Jarvis V61.9.3', // 修正版としてマイナーアップデート
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey), useMaterial3: true),
       home: const ResearchPage(),
     );
@@ -100,7 +100,7 @@ class _ResearchPageState extends State<ResearchPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('🤖 Jarvis V61.9.2'), centerTitle: true, toolbarHeight: 34, backgroundColor: Colors.blueGrey[50]),
+      appBar: AppBar(title: const Text('🤖 Jarvis V61.9.3'), centerTitle: true, toolbarHeight: 34, backgroundColor: Colors.blueGrey[50]),
       body: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 600),
