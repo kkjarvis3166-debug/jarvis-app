@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:html' as html;
 import 'dart:math';
 
@@ -10,8 +11,8 @@ class FishingApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false, 
-      title: 'Jarvis V61.9.4', // 修正版としてマイナーアップデート
+      debugShowCheckedModeBanner: false,
+      title: 'Jarvis V61.9.4',
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey), useMaterial3: true),
       home: const ResearchPage(),
     );
@@ -26,29 +27,36 @@ class ResearchPage extends StatefulWidget {
 
 class _ResearchPageState extends State<ResearchPage> {
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _incTaxController = TextEditingController(); 
-  final TextEditingController _exTaxController = TextEditingController();  
+  final TextEditingController _incTaxController = TextEditingController();
+  final TextEditingController _exTaxController = TextEditingController();
   final TextEditingController _berryPriceController = TextEditingController();
   final TextEditingController _yahooPriceController = TextEditingController();
   final TextEditingController _sellPriceController = TextEditingController();
   final TextEditingController _reductionPriceController = TextEditingController();
 
-  int _selectedRate = 50; 
+  int _selectedRate = 50;
   int _ansInc = 0; int _ansEx = 0;
   int _sProf = 0; double _sRate = 0;
-  int _aProf = 0; double _aRate = 0; int _aFee = 0; 
+  int _aProf = 0; double _aRate = 0; int _aFee = 0;
 
   String _fmt(int p) => p == 0 ? "0" : p.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
 
   void _taxCalc(String v, bool isInc) {
     final int p = int.tryParse(v.replaceAll(',', '')) ?? 0;
     if (p == 0) {
-      if (isInc) _exTaxController.clear(); else _incTaxController.clear();
+      if (isInc) {
+        _exTaxController.clear();
+      } else {
+        _incTaxController.clear();
+      }
       return;
     }
     setState(() {
-      if (isInc) _exTaxController.text = (p / 1.1).floor().toString();
-      else _incTaxController.text = (p * 1.1).floor().toString();
+      if (isInc) {
+        _exTaxController.text = (p / 1.1).floor().toString();
+      } else {
+        _incTaxController.text = (p * 1.1).floor().toString();
+      }
     });
   }
 
@@ -59,10 +67,10 @@ class _ResearchPageState extends State<ResearchPage> {
       if (s > 0) {
         _ansInc = max(0, (s * _selectedRate / 100).floor() - r);
         _ansEx = (_ansInc / 1.1).floor();
-        _sProf = s - _ansInc; 
+        _sProf = s - _ansInc;
         _sRate = (_sProf / s) * 100;
-        _aFee = (s * 0.1).floor(); // ヤフオク手数料10%
-        _aProf = s - _aFee - 800 - _ansInc; // 手数料と送料800円を引く
+        _aFee = (s * 0.1).floor();
+        _aProf = s - _aFee - 800 - _ansInc;
         _aRate = (_aProf / s) * 100;
       } else {
         _ansInc = 0; _ansEx = 0; _sProf = 0; _sRate = 0; _aProf = 0; _aRate = 0; _aFee = 0;
@@ -70,15 +78,11 @@ class _ResearchPageState extends State<ResearchPage> {
     });
   }
 
-  // --- 修正箇所: iOSでの白画面抑制とURLエンコード対応 ---
   void _search(String t) async {
     String q = _searchController.text.trim();
     if (q.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: q));
-    
-    // 検索語句を安全なURL形式に変換
     final encodedQ = Uri.encodeComponent(q);
-    
     String url;
     if (t == 'maker') {
       url = 'https://www.google.com/search?q=$encodedQ+定価';
@@ -87,15 +91,15 @@ class _ResearchPageState extends State<ResearchPage> {
     } else {
       url = 'https://auctions.yahoo.co.jp/closedsearch/closedsearch?p="$encodedQ"&va="$encodedQ"&istatus=2';
     }
-
-    // window.openの代わりにAnchorElementを動的生成してクリック
-    // これによりiOS Safari等の「戻る」挙動が安定し、空タブが残りにくくなります
-    final anchor = html.AnchorElement(href: url)
-      ..target = '_blank'
-      ..rel = 'noopener noreferrer';
-    anchor.click();
+    
+    // Web環境でのみ動作させるための事実に基づいた記述
+    if (kIsWeb) {
+      final anchor = html.AnchorElement(href: url)
+        ..target = '_blank'
+        ..rel = 'noopener noreferrer';
+      anchor.click();
+    }
   }
-  // --------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -121,20 +125,20 @@ class _ResearchPageState extends State<ResearchPage> {
                 ]),
                 const SizedBox(height: 10),
                 Row(children: [
-                  _btn('TB相場', const Color(0xFF2E7D32), () => _search('berry')), 
-                  const SizedBox(width: 8), 
-                  Expanded(child: _field(_berryPriceController, 'タックルベリー価格', (v) { 
-                    final int b = int.tryParse(v.replaceAll(',',''))??0; 
-                    if(b>0){ _sellPriceController.text = ((b / 100).floor() * 100).toString(); _calc(); } 
+                  _btn('TB相場', const Color(0xFF2E7D32), () => _search('berry')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _field(_berryPriceController, 'タックルベリー価格', (v) {
+                    final int b = int.tryParse(v.replaceAll(',',''))??0;
+                    if(b>0){ _sellPriceController.text = ((b / 100).floor() * 100).toString(); _calc(); }
                   })),
                 ]),
                 const SizedBox(height: 10),
                 Row(children: [
-                  _btn('ヤフオク', const Color(0xFFC62828), () => _search('yahoo')), 
-                  const SizedBox(width: 8), 
-                  Expanded(child: _field(_yahooPriceController, '落札相場', (v) { 
-                    final int y = int.tryParse(v.replaceAll(',',''))??0; 
-                    if(y>0){ _sellPriceController.text = ((y / 100).floor() * 100).toString(); _calc(); } 
+                  _btn('ヤフオク', const Color(0xFFC62828), () => _search('yahoo')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _field(_yahooPriceController, '落札相場', (v) {
+                    final int y = int.tryParse(v.replaceAll(',',''))??0;
+                    if(y>0){ _sellPriceController.text = ((y / 100).floor() * 100).toString(); _calc(); }
                   })),
                 ]),
                 const Divider(height: 30),
