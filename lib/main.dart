@@ -4,8 +4,17 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'dart:async';
+import 'dart:convert';
+// Linterの警告を回避：JarvisはWeb運用前提のため dart:html を許可する
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
+
+// [1000億ドル・リスク管理] 
+const String kAppVersion = 'V61.9.15';
+const String kAdminPin = '140';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const FishingApp());
 }
 
@@ -44,9 +53,7 @@ class _ResearchPageState extends State<ResearchPage> {
 
   bool _isCampaignOn = false;
   double _campaignBonusRate = 20.0;
-  DateTime _campaignEndTime = DateTime(
-    DateTime.now().year, DateTime.now().month, DateTime.now().day, 23, 59,
-  );
+  DateTime _campaignEndTime = DateTime.now();
 
   int _selectedRate = 50;
   int _ansInc = 0;
@@ -60,34 +67,67 @@ class _ResearchPageState extends State<ResearchPage> {
   @override
   void initState() {
     super.initState();
+    // 起動直後に「自分が最新か」をサーバーに確認しに行く（キャッシュ完全無視）
+    _checkVersionAndAutoReload();
+
+    final now = DateTime.now();
+    _campaignEndTime = DateTime(now.year, now.month, now.day, 23, 59);
     _loadCampaignSettings();
+
     Timer.periodic(const Duration(minutes: 1), (timer) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     });
   }
 
-  Future<void> _loadCampaignSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isCampaignOn = prefs.getBool('cp_on') ?? false;
-      _campaignBonusRate = prefs.getDouble('cp_rate') ?? 20.0;
-      final endStr = prefs.getString('cp_end');
-      if (endStr != null) {
-        _campaignEndTime = DateTime.parse(endStr);
-      } else {
-        final now = DateTime.now();
-        _campaignEndTime = DateTime(now.year, now.month, now.day, 23, 59);
+  // --- 【1000億ドルの防壁】強制オートリロード機構 ---
+  Future<void> _checkVersionAndAutoReload() async {
+    try {
+      final cacheBuster = DateTime.now().millisecondsSinceEpoch;
+      final url = 'version.json?_=$cacheBuster';
+      
+      final response = await html.HttpRequest.getString(url);
+      final data = jsonDecode(response);
+      final serverVersion = data['version'] as String?;
+
+      if (serverVersion != null && serverVersion != kAppVersion) {
+        debugPrint('Update Required: $serverVersion. Executing auto-reload...');
+        html.window.location.reload(); 
       }
-    });
-    _calc();
+    } catch (e) {
+      debugPrint('Version check bypassed: $e');
+    }
+  }
+  // ------------------------------------------------
+
+  Future<void> _loadCampaignSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _isCampaignOn = prefs.getBool('cp_on') ?? false;
+        _campaignBonusRate = prefs.getDouble('cp_rate') ?? 20.0;
+        final endStr = prefs.getString('cp_end');
+        if (endStr != null) {
+          _campaignEndTime = DateTime.parse(endStr);
+        }
+      });
+      _calc();
+    } catch (e) {
+      debugPrint('Settings Load Error: $e');
+    }
   }
 
   Future<void> _saveCampaignSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('cp_on', _isCampaignOn);
-    await prefs.setDouble('cp_rate', _campaignBonusRate);
-    await prefs.setString('cp_end', _campaignEndTime.toIso8601String());
-    _calc();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('cp_on', _isCampaignOn);
+      await prefs.setDouble('cp_rate', _campaignBonusRate);
+      await prefs.setString('cp_end', _campaignEndTime.toIso8601String());
+      _calc();
+    } catch (e) {
+      debugPrint('Settings Save Error: $e');
+    }
   }
 
   bool get _isCampaignActive =>
@@ -130,19 +170,27 @@ class _ResearchPageState extends State<ResearchPage> {
         _ansInc = max(0, baseCalculated.floor() - r);
         _ansEx = (_ansInc / 1.1).floor();
         _sProf = s - _ansInc;
-        _sRate = (_sProf / s) * 100;
+        _sRate = s > 0 ? (_sProf / s) * 100 : 0;
         _aFee = (s * 0.1).floor();
         _aProf = s - _aFee - 800 - _ansInc;
-        _aRate = (_aProf / s) * 100;
+        _aRate = s > 0 ? (_aProf / s) * 100 : 0;
       } else {
-        _ansInc = 0; _ansEx = 0; _sProf = 0; _sRate = 0; _aProf = 0; _aRate = 0; _aFee = 0;
+        _ansInc = 0;
+        _ansEx = 0;
+        _sProf = 0;
+        _sRate = 0;
+        _aProf = 0;
+        _aRate = 0;
+        _aFee = 0;
       }
     });
   }
 
   Future<void> _search(String type) async {
     final String query = _searchController.text.trim();
-    if (query.isEmpty) return;
+    if (query.isEmpty) {
+      return;
+    }
     await Clipboard.setData(ClipboardData(text: query));
     final encodedQuery = Uri.encodeComponent(query);
     String urlString = (type == 'maker')
@@ -164,7 +212,7 @@ class _ResearchPageState extends State<ResearchPage> {
         title: const Text('管理者認証'),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(labelText: 'PINコード(3桁)を入力'),
+          decoration: const InputDecoration(labelText: 'PINコード(140)を入力'),
           obscureText: true,
           keyboardType: TextInputType.number,
         ),
@@ -172,7 +220,7 @@ class _ResearchPageState extends State<ResearchPage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
           ElevatedButton(
             onPressed: () {
-              if (controller.text == '140') { // 3桁PIN：140
+              if (controller.text == kAdminPin) {
                 Navigator.pop(context);
                 _showCampaignSettings();
               }
@@ -216,7 +264,7 @@ class _ResearchPageState extends State<ResearchPage> {
               ),
               const SizedBox(height: 10),
               ListTile(
-                title: const Text('終了日を選択 (自動で23:59に設定)'),
+                title: const Text('終了日を選択'),
                 subtitle: Text('${_campaignEndTime.year}/${_campaignEndTime.month}/${_campaignEndTime.day} ${_campaignEndTime.hour}:${_campaignEndTime.minute.toString().padLeft(2, '0')}'),
                 trailing: const Icon(Icons.calendar_today),
                 onTap: () async {
@@ -246,7 +294,7 @@ class _ResearchPageState extends State<ResearchPage> {
         backgroundColor: Colors.blueGrey[50],
         actions: [
           IconButton(icon: const Icon(Icons.settings, size: 18, color: Colors.grey), onPressed: _showAdminAuth),
-          const Center(child: Padding(padding: EdgeInsets.only(right: 16.0), child: Text('V61.9.13', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)))),
+          const Center(child: Padding(padding: EdgeInsets.only(right: 16.0), child: Text(kAppVersion, style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)))),
         ],
       ),
       body: Column(
@@ -276,7 +324,7 @@ class _ResearchPageState extends State<ResearchPage> {
                         children: [
                           _btn('TB相場', const Color(0xFF2E7D32), () => _search('berry')),
                           const SizedBox(width: 8),
-                          Expanded(child: _field(_berryPriceController, 'タックルベリー価格', (v) { final int b = int.tryParse(v.replaceAll(',', '')) ?? 0; if (b > 0) { _sellPriceController.text = ((b / 100).floor() * 100).toString(); _calc(); } })),
+                          Expanded(child: _field(_berryPriceController, '価格入力', (v) { final int b = int.tryParse(v.replaceAll(',', '')) ?? 0; if (b > 0) { _sellPriceController.text = ((b / 100).floor() * 100).toString(); _calc(); } })),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -284,7 +332,7 @@ class _ResearchPageState extends State<ResearchPage> {
                         children: [
                           _btn('ヤフオク', const Color(0xFFC62828), () => _search('yahoo')),
                           const SizedBox(width: 8),
-                          Expanded(child: _field(_yahooPriceController, '落札相場', (v) { final int y = int.tryParse(v.replaceAll(',', '')) ?? 0; if (y > 0) { _sellPriceController.text = ((y / 100).floor() * 100).toString(); _calc(); } })),
+                          Expanded(child: _field(_yahooPriceController, '相場入力', (v) { final int y = int.tryParse(v.replaceAll(',', '')) ?? 0; if (y > 0) { _sellPriceController.text = ((y / 100).floor() * 100).toString(); _calc(); } })),
                         ],
                       ),
                       const Divider(height: 30),
@@ -318,7 +366,6 @@ class _ResearchPageState extends State<ResearchPage> {
   Widget _profCard(String t, int p, double r, int? f, Color c) => Container(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4), decoration: BoxDecoration(border: Border.all(color: c, width: 2), borderRadius: BorderRadius.circular(6)), child: Column(mainAxisSize: MainAxisSize.max, children: [Text(t, style: TextStyle(color: c, fontWeight: FontWeight.bold, fontSize: 14)), if (f != null) Text('手数料: ¥${_fmt(f)}', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold)), if (f == null) const SizedBox(height: 13.0), Text('¥${_fmt(p)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: c)), Text('粗利率: ${r.toStringAsFixed(1)}%', style: TextStyle(color: c, fontWeight: FontWeight.bold, fontSize: 13))]));
 }
 
-// --- キャンペーン用バナー (V61.9.13：ライブラリを一切使わない超堅牢設計) ---
 class NeonBanner extends StatefulWidget {
   final double rate;
   final DateTime endTime;
@@ -335,34 +382,33 @@ class _NeonBannerState extends State<NeonBanner> with SingleTickerProviderStateM
     _controller = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
   }
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
+      height: 90,
       color: Colors.yellow,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 時計回り電飾 (数学的に座標計算して描画)
           Positioned.fill(
             child: AnimatedBuilder(
               animation: _controller,
-              builder: (context, child) => CustomPaint(painter: MathNeonPainter(progress: _controller.value)),
+              builder: (context, child) => CustomPaint(painter: SecureMathPainter(progress: _controller.value)),
             ),
           ),
-          // テキスト部分 (上下に十分なマージンを確保)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('買取価格 ${widget.rate.toInt()}%UP 適用中！', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 22)),
-                const SizedBox(height: 4),
-                Text('〜 ${widget.endTime.month}/${widget.endTime.day} ${widget.endTime.hour}:${widget.endTime.minute.toString().padLeft(2, '0')} まで', style: const TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
-            ),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('買取価格 ${widget.rate.toInt()}%UP 適用中！', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 22)),
+              const SizedBox(height: 4),
+              Text('〜 ${widget.endTime.month}/${widget.endTime.day} ${widget.endTime.hour}:${widget.endTime.minute.toString().padLeft(2, '0')} まで', style: const TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
           ),
         ],
       ),
@@ -370,50 +416,43 @@ class _NeonBannerState extends State<NeonBanner> with SingleTickerProviderStateM
   }
 }
 
-// 数学的座標計算により PathMetrics のバグを回避する Painter
-class MathNeonPainter extends CustomPainter {
+class SecureMathPainter extends CustomPainter {
   final double progress;
-  MathNeonPainter({required this.progress});
+  SecureMathPainter({required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
+    if (size.width <= 10 || size.height <= 10) {
+      return;
+    }
 
     final paint = Paint()..style = PaintingStyle.fill;
     const double dotSize = 6.0;
     const double spacing = 18.0;
 
-    // 長方形の全周を計算
-    final double perimeter = 2 * (size.width + size.height);
+    final double w = size.width;
+    final double h = size.height;
+    final double perimeter = 2 * (w + h);
     
-    // 全周にわたってドットを配置
     for (double d = 0; d < perimeter; d += spacing) {
       Offset pos;
-      // 1. 上辺 (左から右)
-      if (d < size.width) {
+      if (d < w) {
         pos = Offset(d, 0);
-      } 
-      // 2. 右辺 (上から下)
-      else if (d < size.width + size.height) {
-        pos = Offset(size.width, d - size.width);
-      } 
-      // 3. 下辺 (右から左)
-      else if (d < 2 * size.width + size.height) {
-        pos = Offset(size.width - (d - (size.width + size.height)), size.height);
-      } 
-      // 4. 左辺 (下から上)
-      else {
-        pos = Offset(0, size.height - (d - (2 * size.width + size.height)));
+      } else if (d < w + h) {
+        pos = Offset(w, d - w);
+      } else if (d < 2 * w + h) {
+        pos = Offset(w - (d - (w + h)), h);
+      } else {
+        pos = Offset(0, h - (d - (2 * w + h)));
       }
 
-      // 進捗に応じた不透明度計算 (時計回りの回転)
       final double normalizedDist = d / perimeter;
       final double opacity = (progress - normalizedDist) % 1.0;
       
-      paint.color = Colors.red.withOpacity(opacity > 0.8 ? 1.0 : 0.1);
+      paint.color = Colors.red.withOpacity(opacity > 0.85 ? 1.0 : 0.1);
       canvas.drawCircle(pos, dotSize / 2, paint);
     }
   }
   @override
-  bool shouldRepaint(MathNeonPainter oldDelegate) => true;
+  bool shouldRepaint(SecureMathPainter oldDelegate) => true;
 }
