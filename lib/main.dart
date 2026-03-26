@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
+import 'dart:async';
 
 void main() {
   runApp(const FishingApp());
@@ -40,6 +42,10 @@ class _ResearchPageState extends State<ResearchPage> {
   final TextEditingController _sellPriceController = TextEditingController();
   final TextEditingController _reductionPriceController = TextEditingController();
 
+  bool _isCampaignOn = false;
+  double _campaignBonusRate = 20.0;
+  DateTime _campaignEndTime = DateTime.now();
+
   int _selectedRate = 50;
   int _ansInc = 0;
   int _ansEx = 0;
@@ -48,6 +54,40 @@ class _ResearchPageState extends State<ResearchPage> {
   int _aProf = 0;
   double _aRate = 0;
   int _aFee = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCampaignSettings();
+    Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> _loadCampaignSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isCampaignOn = prefs.getBool('cp_on') ?? false;
+      _campaignBonusRate = prefs.getDouble('cp_rate') ?? 20.0;
+      final endStr = prefs.getString('cp_end');
+      if (endStr != null) {
+        _campaignEndTime = DateTime.parse(endStr);
+      }
+    });
+    _calc();
+  }
+
+  Future<void> _saveCampaignSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('cp_on', _isCampaignOn);
+    await prefs.setDouble('cp_rate', _campaignBonusRate);
+    await prefs.setString('cp_end', _campaignEndTime.toIso8601String());
+    _calc();
+  }
+
+  bool get _isCampaignActive {
+    return _isCampaignOn && DateTime.now().isBefore(_campaignEndTime);
+  }
 
   String _fmt(int p) => p == 0
       ? "0"
@@ -78,9 +118,14 @@ class _ResearchPageState extends State<ResearchPage> {
         int.tryParse(_sellPriceController.text.replaceAll(',', '')) ?? 0;
     final int r =
         int.tryParse(_reductionPriceController.text.replaceAll(',', '')) ?? 0;
+
     setState(() {
       if (s > 0) {
-        _ansInc = max(0, (s * _selectedRate / 100).floor() - r);
+        double baseCalculated = s * _selectedRate / 100;
+        if (_isCampaignActive) {
+          baseCalculated *= (1 + _campaignBonusRate / 100);
+        }
+        _ansInc = max(0, baseCalculated.floor() - r);
         _ansEx = (_ansInc / 1.1).floor();
         _sProf = s - _ansInc;
         _sRate = (_sProf / s) * 100;
@@ -101,9 +146,7 @@ class _ResearchPageState extends State<ResearchPage> {
 
   Future<void> _search(String type) async {
     final String query = _searchController.text.trim();
-    if (query.isEmpty) {
-      return;
-    }
+    if (query.isEmpty) return;
 
     await Clipboard.setData(ClipboardData(text: query));
     final encodedQuery = Uri.encodeComponent(query);
@@ -124,6 +167,113 @@ class _ResearchPageState extends State<ResearchPage> {
     }
   }
 
+  void _showAdminAuth() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('管理者認証'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'PINコードを入力'),
+          obscureText: true,
+          keyboardType: TextInputType.number,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text == '1234') {
+                Navigator.pop(context);
+                _showCampaignSettings();
+              }
+            },
+            child: const Text('認証'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCampaignSettings() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            top: 20, left: 20, right: 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('キャンペーン設定', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Text('状態：'),
+                  Radio<bool>(
+                    value: true,
+                    groupValue: _isCampaignOn,
+                    onChanged: (v) => setModalState(() => _isCampaignOn = v!),
+                  ),
+                  const Text('ON'),
+                  Radio<bool>(
+                    value: false,
+                    groupValue: _isCampaignOn,
+                    onChanged: (v) => setModalState(() => _isCampaignOn = v!),
+                  ),
+                  const Text('OFF'),
+                ],
+              ),
+              TextField(
+                decoration: const InputDecoration(labelText: '買取アップ率 (%)', suffixText: '%'),
+                keyboardType: TextInputType.number,
+                onChanged: (v) => _campaignBonusRate = double.tryParse(v) ?? 20.0,
+                controller: TextEditingController(text: _campaignBonusRate.toInt().toString()),
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                title: const Text('終了日時を設定'),
+                subtitle: Text('${_campaignEndTime.year}/${_campaignEndTime.month}/${_campaignEndTime.day} ${_campaignEndTime.hour}:${_campaignEndTime.minute.toString().padLeft(2, '0')}'),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: _campaignEndTime,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2030),
+                  );
+                  if (date != null && context.mounted) {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(_campaignEndTime),
+                    );
+                    if (time != null) {
+                      setModalState(() {
+                        _campaignEndTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                      });
+                    }
+                  }
+                },
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  _saveCampaignSettings();
+                  Navigator.pop(context);
+                },
+                child: const Text('設定を保存して戻る'),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -132,184 +282,171 @@ class _ResearchPageState extends State<ResearchPage> {
         centerTitle: true,
         toolbarHeight: 34,
         backgroundColor: Colors.blueGrey[50],
-        actions: const [
-          Center(
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings, size: 18, color: Colors.grey),
+            onPressed: _showAdminAuth,
+          ),
+          const Center(
             child: Padding(
               padding: EdgeInsets.only(right: 16.0),
               child: Text(
-                'V61.9.7', // バージョンを7にアップデート
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold,
+                'V61.9.8',
+                style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_isCampaignActive)
+            NeonBanner(rate: _campaignBonusRate, endTime: _campaignEndTime),
+          Expanded(
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _searchController,
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        decoration: const InputDecoration(
+                          labelText: '商品名を入力',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _btn('定価検索', Colors.blueGrey, () => _search('maker')),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                _field(_incTaxController, '定価(税込)', (v) => _taxCalc(v, true)),
+                                const SizedBox(height: 4),
+                                _field(_exTaxController, '定価(税抜)', (v) => _taxCalc(v, false)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _btn('TB相場', const Color(0xFF2E7D32), () => _search('berry')),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _field(_berryPriceController, 'タックルベリー価格', (v) {
+                              final int b = int.tryParse(v.replaceAll(',', '')) ?? 0;
+                              if (b > 0) {
+                                _sellPriceController.text = ((b / 100).floor() * 100).toString();
+                                _calc();
+                              }
+                            }),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _btn('ヤフオク', const Color(0xFFC62828), () => _search('yahoo')),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _field(_yahooPriceController, '落札相場', (v) {
+                              final int y = int.tryParse(v.replaceAll(',', '')) ?? 0;
+                              if (y > 0) {
+                                _sellPriceController.text = ((y / 100).floor() * 100).toString();
+                                _calc();
+                              }
+                            }),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 30),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: TextField(
+                              controller: _sellPriceController,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              onChanged: (_) => _calc(),
+                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                              decoration: const InputDecoration(
+                                labelText: '店舗販売予定価格',
+                                prefixText: '¥ ',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 85,
+                            child: DropdownButtonFormField<int>(
+                              value: _selectedRate,
+                              items: [30, 35, 40, 45, 50, 55, 60, 65, 70]
+                                  .map((v) => DropdownMenuItem(value: v, child: Text('$v%')))
+                                  .toList(),
+                              onChanged: (v) {
+                                setState(() => _selectedRate = v!);
+                                _calc();
+                              },
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                labelText: '買取率',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _reductionPriceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        onChanged: (_) => _calc(),
+                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 24),
+                        decoration: const InputDecoration(
+                          labelText: '状態・欠品による減額',
+                          prefixText: '¥ ',
+                          prefixStyle: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                          labelStyle: TextStyle(color: Colors.red),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Colors.red, width: 2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      _resCard(),
+                      const SizedBox(height: 15),
+                      IntrinsicHeight(
+                        child: Row(
+                          children: [
+                            Expanded(child: _profCard('店舗販売利益', _sProf, _sRate, null, const Color(0xFF0D47A1))),
+                            const SizedBox(width: 8),
+                            Expanded(child: _profCard('ヤフオク利益', _aProf, _aRate, _aFee, const Color(0xFFBF360C))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ],
       ),
-      body: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _searchController,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold),
-                  decoration: const InputDecoration(
-                    labelText: '商品名を入力',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _btn('定価検索', Colors.blueGrey, () => _search('maker')),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        children: [
-                          _field(_incTaxController, '定価(税込)',
-                              (v) => _taxCalc(v, true)),
-                          const SizedBox(height: 4),
-                          _field(_exTaxController, '定価(税抜)',
-                              (v) => _taxCalc(v, false)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _btn('TB相場', const Color(0xFF2E7D32), () => _search('berry')),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _field(_berryPriceController, 'タックルベリー価格', (v) {
-                        final int b = int.tryParse(v.replaceAll(',', '')) ?? 0;
-                        if (b > 0) {
-                          _sellPriceController.text =
-                              ((b / 100).floor() * 100).toString();
-                          _calc();
-                        }
-                      }),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _btn('ヤフオク', const Color(0xFFC62828), () => _search('yahoo')),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _field(_yahooPriceController, '落札相場', (v) {
-                        final int y = int.tryParse(v.replaceAll(',', '')) ?? 0;
-                        if (y > 0) {
-                          _sellPriceController.text =
-                              ((y / 100).floor() * 100).toString();
-                          _calc();
-                        }
-                      }),
-                    ),
-                  ],
-                ),
-                const Divider(height: 30),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: TextField(
-                        controller: _sellPriceController,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly
-                        ],
-                        onChanged: (_) => _calc(),
-                        style: const TextStyle(
-                            fontSize: 24, fontWeight: FontWeight.bold),
-                        decoration: const InputDecoration(
-                          labelText: '店舗販売予定価格',
-                          prefixText: '¥ ',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 85,
-                      child: DropdownButtonFormField<int>(
-                        value: _selectedRate,
-                        // 買取率のリストに 65 を追加！
-                        items: [30, 35, 40, 45, 50, 55, 60, 65, 70]
-                            .map((v) => DropdownMenuItem(
-                                value: v, child: Text('$v%')))
-                            .toList(),
-                        onChanged: (v) {
-                          setState(() => _selectedRate = v!);
-                          _calc();
-                        },
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          labelText: '買取率',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _reductionPriceController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => _calc(),
-                  style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 24),
-                  decoration: const InputDecoration(
-                    labelText: '状態・欠品による減額',
-                    prefixText: '¥ ',
-                    prefixStyle: TextStyle(
-                        color: Colors.red, fontWeight: FontWeight.bold),
-                    labelStyle: TextStyle(color: Colors.red),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.red, width: 2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 15),
-                _resCard(),
-                const SizedBox(height: 15),
-                IntrinsicHeight(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _profCard('店舗販売利益', _sProf, _sRate, null,
-                            const Color(0xFF0D47A1)),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _profCard('ヤフオク利益', _aProf, _aRate, _aFee,
-                            const Color(0xFFBF360C)),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
-  Widget _field(TextEditingController c, String h, Function(String) o) =>
-      TextField(
+  Widget _field(TextEditingController c, String h, Function(String) o) => TextField(
         controller: c,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -333,15 +470,9 @@ class _ResearchPageState extends State<ResearchPage> {
             backgroundColor: c,
             foregroundColor: Colors.white,
             padding: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
-          child: Text(
-            l,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-          ),
+          child: Text(l, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
         ),
       );
 
@@ -355,17 +486,10 @@ class _ResearchPageState extends State<ResearchPage> {
         ),
         child: Column(
           children: [
-            const Text('お客様提示額 (税込)',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('お客様提示額 (税込)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             Text('¥ ${_fmt(_ansInc)}',
-                style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFBF360C),
-                    height: 1.0)),
-            Text('(税抜: ¥ ${_fmt(_ansEx)})',
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Color(0xFFBF360C), height: 1.0)),
+            Text('(税抜: ¥ ${_fmt(_ansEx)})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           ],
         ),
       );
@@ -379,21 +503,92 @@ class _ResearchPageState extends State<ResearchPage> {
         child: Column(
           mainAxisSize: MainAxisSize.max,
           children: [
-            Text(t,
-                style: TextStyle(
-                    color: c, fontWeight: FontWeight.bold, fontSize: 14)),
+            Text(t, style: TextStyle(color: c, fontWeight: FontWeight.bold, fontSize: 14)),
             if (f != null)
-              Text('手数料: ¥${_fmt(f)}',
-                  style: TextStyle(
-                      color: c, fontSize: 11, fontWeight: FontWeight.bold)),
+              Text('手数料: ¥${_fmt(f)}', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold)),
             if (f == null) const SizedBox(height: 13.0),
-            Text('¥${_fmt(p)}',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 20, color: c)),
-            Text('粗利率: ${r.toStringAsFixed(1)}%',
-                style: TextStyle(
-                    color: c, fontWeight: FontWeight.bold, fontSize: 13)),
+            Text('¥${_fmt(p)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: c)),
+            Text('粗利率: ${r.toStringAsFixed(1)}%', style: TextStyle(color: c, fontWeight: FontWeight.bold, fontSize: 13)),
           ],
         ),
       );
+}
+
+class NeonBanner extends StatefulWidget {
+  final double rate;
+  final DateTime endTime;
+  const NeonBanner({super.key, required this.rate, required this.endTime});
+
+  @override
+  State<NeonBanner> createState() => _NeonBannerState();
+}
+
+class _NeonBannerState extends State<NeonBanner> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Colors.yellow,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) => CustomPaint(painter: NeonPainter(progress: _controller.value)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Center(
+              child: Column(
+                children: [
+                  Text(
+                    '【現在】買取価格 ${widget.rate.toInt()}%UP 適用中！',
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 18),
+                  ),
+                  Text(
+                    '〜 ${widget.endTime.month}/${widget.endTime.day} ${widget.endTime.hour}:${widget.endTime.minute.toString().padLeft(2, '0')} まで',
+                    style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class NeonPainter extends CustomPainter {
+  final double progress;
+  NeonPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    const double spacing = 15.0;
+    for (double x = 0; x < size.width; x += spacing) {
+      final opacity = ((x / size.width + progress) % 1.0);
+      paint.color = Colors.red.withOpacity(opacity > 0.8 ? 1.0 : 0.15);
+      canvas.drawCircle(Offset(x, 3), 2.5, paint);
+      canvas.drawCircle(Offset(x, size.height - 3), 2.5, paint);
+    }
+  }
+  @override
+  bool shouldRepaint(NeonPainter oldDelegate) => true;
 }
