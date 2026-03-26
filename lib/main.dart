@@ -44,7 +44,14 @@ class _ResearchPageState extends State<ResearchPage> {
 
   bool _isCampaignOn = false;
   double _campaignBonusRate = 20.0;
-  DateTime _campaignEndTime = DateTime.now();
+  // 初期値を今日の23:59に設定
+  DateTime _campaignEndTime = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+    23,
+    59,
+  );
 
   int _selectedRate = 50;
   int _ansInc = 0;
@@ -72,6 +79,10 @@ class _ResearchPageState extends State<ResearchPage> {
       final endStr = prefs.getString('cp_end');
       if (endStr != null) {
         _campaignEndTime = DateTime.parse(endStr);
+      } else {
+        // 保存データがない場合も23:59をデフォルトに
+        final now = DateTime.now();
+        _campaignEndTime = DateTime(now.year, now.month, now.day, 23, 59);
       }
     });
     _calc();
@@ -235,7 +246,7 @@ class _ResearchPageState extends State<ResearchPage> {
               ),
               const SizedBox(height: 10),
               ListTile(
-                title: const Text('終了日時を設定'),
+                title: const Text('終了日を選択（時刻は23:59にセットされます）'),
                 subtitle: Text('${_campaignEndTime.year}/${_campaignEndTime.month}/${_campaignEndTime.day} ${_campaignEndTime.hour}:${_campaignEndTime.minute.toString().padLeft(2, '0')}'),
                 trailing: const Icon(Icons.calendar_today),
                 onTap: () async {
@@ -246,19 +257,32 @@ class _ResearchPageState extends State<ResearchPage> {
                     lastDate: DateTime(2030),
                   );
                   if (date != null && context.mounted) {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay.fromDateTime(_campaignEndTime),
-                    );
-                    if (time != null) {
-                      setModalState(() {
-                        _campaignEndTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-                      });
-                    }
+                    setModalState(() {
+                      // 日付を選んだら、時刻を強制的に23:59にする
+                      _campaignEndTime = DateTime(date.year, date.month, date.day, 23, 59);
+                    });
                   }
                 },
               ),
-              const SizedBox(height: 20),
+              // 時刻だけ微調整したい時のための隠しオプション（タップで時刻選択）
+              TextButton(
+                onPressed: () async {
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(_campaignEndTime),
+                  );
+                  if (time != null && context.mounted) {
+                    setModalState(() {
+                      _campaignEndTime = DateTime(
+                        _campaignEndTime.year, _campaignEndTime.month, _campaignEndTime.day,
+                        time.hour, time.minute,
+                      );
+                    });
+                  }
+                },
+                child: const Text('時刻を細かく指定する', style: TextStyle(fontSize: 12)),
+              ),
+              const SizedBox(height: 10),
               ElevatedButton(
                 onPressed: () {
                   _saveCampaignSettings();
@@ -291,7 +315,7 @@ class _ResearchPageState extends State<ResearchPage> {
             child: Padding(
               padding: EdgeInsets.only(right: 16.0),
               child: Text(
-                'V61.9.8',
+                'V61.9.9',
                 style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
               ),
             ),
