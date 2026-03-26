@@ -10,7 +10,7 @@ import 'dart:convert';
 import 'dart:html' as html;
 
 // [1000億ドル・リスク管理] 
-const String kAppVersion = 'V61.9.15';
+const String kAppVersion = 'V61.9.16';
 const String kAdminPin = '140';
 
 void main() {
@@ -212,7 +212,7 @@ class _ResearchPageState extends State<ResearchPage> {
         title: const Text('管理者認証'),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(labelText: 'PINコード(140)を入力'),
+          decoration: const InputDecoration(labelText: 'PINコードを入力'),
           obscureText: true,
           keyboardType: TextInputType.number,
         ),
