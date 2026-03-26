@@ -42,6 +42,7 @@ class _ResearchPageState extends State<ResearchPage> {
   final TextEditingController _sellPriceController = TextEditingController();
   final TextEditingController _reductionPriceController = TextEditingController();
 
+  // キャンペーン用状態
   bool _isCampaignOn = false;
   double _campaignBonusRate = 20.0;
   // 初期値を今日の23:59に設定
@@ -66,11 +67,13 @@ class _ResearchPageState extends State<ResearchPage> {
   void initState() {
     super.initState();
     _loadCampaignSettings();
+    // 1分ごとにキャンペーン終了をチェックして自動更新
     Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() {});
     });
   }
 
+  // 設定の読み込み
   Future<void> _loadCampaignSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -85,9 +88,10 @@ class _ResearchPageState extends State<ResearchPage> {
         _campaignEndTime = DateTime(now.year, now.month, now.day, 23, 59);
       }
     });
-    _calc();
+    _calc(); // 読み込み後に再計算
   }
 
+  // 設定の保存
   Future<void> _saveCampaignSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('cp_on', _isCampaignOn);
@@ -96,6 +100,7 @@ class _ResearchPageState extends State<ResearchPage> {
     _calc();
   }
 
+  // キャンペーンが現在有効か判定
   bool get _isCampaignActive {
     return _isCampaignOn && DateTime.now().isBefore(_campaignEndTime);
   }
@@ -132,10 +137,14 @@ class _ResearchPageState extends State<ResearchPage> {
 
     setState(() {
       if (s > 0) {
+        // 通常の買取額（税抜計算の基礎）
         double baseCalculated = s * _selectedRate / 100;
+
+        // キャンペーン適用（有効な場合のみ倍率をかける）
         if (_isCampaignActive) {
           baseCalculated *= (1 + _campaignBonusRate / 100);
         }
+
         _ansInc = max(0, baseCalculated.floor() - r);
         _ansEx = (_ansInc / 1.1).floor();
         _sProf = s - _ansInc;
@@ -178,6 +187,7 @@ class _ResearchPageState extends State<ResearchPage> {
     }
   }
 
+  // 管理者認証ダイアログ
   void _showAdminAuth() {
     final controller = TextEditingController();
     showDialog(
@@ -194,7 +204,7 @@ class _ResearchPageState extends State<ResearchPage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
           ElevatedButton(
             onPressed: () {
-              if (controller.text == '1234') {
+              if (controller.text == '1234') { // PINコード
                 Navigator.pop(context);
                 _showCampaignSettings();
               }
@@ -206,6 +216,7 @@ class _ResearchPageState extends State<ResearchPage> {
     );
   }
 
+  // キャンペーン設定画面
   void _showCampaignSettings() {
     showModalBottomSheet(
       context: context,
@@ -264,7 +275,7 @@ class _ResearchPageState extends State<ResearchPage> {
                   }
                 },
               ),
-              // 時刻だけ微調整したい時のための隠しオプション（タップで時刻選択）
+              // 時刻だけ微調整したい時のためのオプション
               TextButton(
                 onPressed: () async {
                   final time = await showTimePicker(
@@ -295,7 +306,7 @@ class _ResearchPageState extends State<ResearchPage> {
           ),
         ),
       ),
-    );
+        );
   }
 
   @override
@@ -315,7 +326,7 @@ class _ResearchPageState extends State<ResearchPage> {
             child: Padding(
               padding: EdgeInsets.only(right: 16.0),
               child: Text(
-                'V61.9.9',
+                'V61.9.11',
                 style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
               ),
             ),
@@ -324,6 +335,7 @@ class _ResearchPageState extends State<ResearchPage> {
       ),
       body: Column(
         children: [
+          // キャンペーン中のみネオンバナーを表示
           if (_isCampaignActive)
             NeonBanner(rate: _campaignBonusRate, endTime: _campaignEndTime),
           Expanded(
@@ -538,6 +550,7 @@ class _ResearchPageState extends State<ResearchPage> {
       );
 }
 
+// --- ネオンバナーコンポーネント (時計回り ＆ UI調整版) ---
 class NeonBanner extends StatefulWidget {
   final double rate;
   final DateTime endTime;
@@ -553,6 +566,7 @@ class _NeonBannerState extends State<NeonBanner> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    // 回転スピードを調整（3秒で1周）
     _controller = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
   }
 
@@ -566,27 +580,40 @@ class _NeonBannerState extends State<NeonBanner> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: Colors.yellow,
+      color: Colors.yellow, // 黄色背景
       child: Stack(
         children: [
+          // 時計回り電飾（CustomPaint）
           Positioned.fill(
             child: AnimatedBuilder(
               animation: _controller,
               builder: (context, child) => CustomPaint(painter: NeonPainter(progress: _controller.value)),
             ),
           ),
+          // テキスト部分
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Center(
               child: Column(
                 children: [
+                  // メインテキスト（【現在】を削除）
                   Text(
-                    '【現在】買取価格 ${widget.rate.toInt()}%UP 適用中！',
-                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 18),
+                    '買取価格 ${widget.rate.toInt()}%UP 適用中！',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 20, // 少し大きく
+                    ),
                   ),
+                  const SizedBox(height: 2),
+                  // 期限テキスト（サイズアップ）
                   Text(
                     '〜 ${widget.endTime.month}/${widget.endTime.day} ${widget.endTime.hour}:${widget.endTime.minute.toString().padLeft(2, '0')} まで',
-                    style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontSize: 16, // パッと見で分かるサイズに
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -598,21 +625,56 @@ class _NeonBannerState extends State<NeonBanner> with SingleTickerProviderStateM
   }
 }
 
+// --- 時計回り電飾の描画ロジック ---
 class NeonPainter extends CustomPainter {
   final double progress;
   NeonPainter({required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-    const double spacing = 15.0;
-    for (double x = 0; x < size.width; x += spacing) {
-      final opacity = ((x / size.width + progress) % 1.0);
-      paint.color = Colors.red.withOpacity(opacity > 0.8 ? 1.0 : 0.15);
-      canvas.drawCircle(Offset(x, 3), 2.5, paint);
-      canvas.drawCircle(Offset(x, size.height - 3), 2.5, paint);
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.red;
+
+    const double dotSize = 5.0; // LEDの大きさ
+    const double spacing = 15.0; // LEDの間隔
+
+    // 四辺を巡るパスを作成 (内側3pxの位置に配置)
+    final path = Path()
+      ..moveTo(0, 3) // 左上
+      ..lineTo(size.width, 3) // 上辺：左→右
+      ..lineTo(size.width, size.height - 3) // 右辺：上→下
+      ..lineTo(0, size.height - 3) // 下辺：右→左
+      ..close(); // 左辺：下→上（閉じる）
+
+    // パスの計測情報を取得
+    final metrics = path.computeMetrics();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
+    final totalLength = metric.length;
+
+    // パスに沿って一定間隔でドットを描画
+    for (double distance = 0; distance < totalLength; distance += spacing) {
+      // 現在の距離に対応する座標（Tangent）を取得
+      final tangent = metric.getTangentForOffset(distance);
+      if (tangent == null) continue;
+      final offset = tangent.position;
+
+      // このドットの全周における位置割合 (0.0 ～ 1.0)
+      final positionRatio = distance / totalLength;
+
+      // 流れるような点滅ロジック
+      // progress(0->1)が増える時、positionRatio(パス上の位置)が追いかけるように不透明度を計算
+      // これで時計回りの回転に見える
+      final opacity = ((progress - positionRatio) % 1.0);
+      
+      // 不透明度が一定以上のドットだけを明るく光らせる（チェイス演出）
+      paint.color = Colors.red.withOpacity(opacity > 0.85 ? 1.0 : 0.15);
+
+      canvas.drawCircle(offset, dotSize / 2, paint);
     }
   }
+
   @override
   bool shouldRepaint(NeonPainter oldDelegate) => true;
 }
