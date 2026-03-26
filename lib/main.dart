@@ -550,7 +550,7 @@ class _ResearchPageState extends State<ResearchPage> {
       );
 }
 
-// --- ネオンバナーコンポーネント (時計回り ＆ UI調整版) ---
+// --- ネオンバナーコンポーネント (【完全修正】時計回り・レイアウト修正版) ---
 class NeonBanner extends StatefulWidget {
   final double rate;
   final DateTime endTime;
@@ -566,7 +566,7 @@ class _NeonBannerState extends State<NeonBanner> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    // 回転スピードを調整（3秒で1周）
+    // 回転スピード（3秒で1周）
     _controller = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
   }
 
@@ -578,49 +578,52 @@ class _NeonBannerState extends State<NeonBanner> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    // バナー全体の高さを、中のテキストの高さ＋Padding（枠の幅）分にする
+    final textColumn = Column(
+      mainAxisSize: MainAxisSize.min, // 最小限の高さに
+      children: [
+        // メインテキスト
+        Text(
+          '買取価格 ${widget.rate.toInt()}%UP 適用中！',
+          style: const TextStyle(
+            color: Colors.red,
+            fontWeight: FontWeight.w900,
+            fontSize: 20, // 少し大きく
+          ),
+        ),
+        const SizedBox(height: 2),
+        // 期限テキスト（サイズアップ）
+        Text(
+          '〜 ${widget.endTime.month}/${widget.endTime.day} ${widget.endTime.hour}:${widget.endTime.minute.toString().padLeft(2, '0')} まで',
+          style: const TextStyle(
+            color: Colors.red,
+            fontSize: 16, // パッと見で分かるサイズに
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+
     return Container(
       width: double.infinity,
-      color: Colors.yellow, // 黄色背景
+      color: Colors.yellow, // 最外層（黄色背景）
       child: Stack(
+        alignment: Alignment.center, // テキスト部分を中央に
         children: [
-          // 時計回り電飾（CustomPaint）
+          // 時計回り電飾（最外層Containerの全領域に広がる）
           Positioned.fill(
             child: AnimatedBuilder(
               animation: _controller,
               builder: (context, child) => CustomPaint(painter: NeonPainter(progress: _controller.value)),
             ),
           ),
-          // テキスト部分
+          // テキスト部分（LED枠の内側にPaddingを持って配置）
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Center(
-              child: Column(
-                children: [
-                  // メインテキスト（【現在】を削除）
-                  Text(
-                    '買取価格 ${widget.rate.toInt()}%UP 適用中！',
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 20, // 少し大きく
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  // 期限テキスト（サイズアップ）
-                  Text(
-                    '〜 ${widget.endTime.month}/${widget.endTime.day} ${widget.endTime.hour}:${widget.endTime.minute.toString().padLeft(2, '0')} まで',
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontSize: 16, // パッと見で分かるサイズに
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+            padding: const EdgeInsets.all(12.0), // LED枠の幅（上下左右12px）
+            child: textColumn,
+          )
+        ]
+      )
     );
   }
 }
@@ -639,12 +642,12 @@ class NeonPainter extends CustomPainter {
     const double dotSize = 5.0; // LEDの大きさ
     const double spacing = 15.0; // LEDの間隔
 
-    // 四辺を巡るパスを作成 (内側3pxの位置に配置)
+    // バナーの四辺を巡るパスを作成
     final path = Path()
-      ..moveTo(0, 3) // 左上
-      ..lineTo(size.width, 3) // 上辺：左→右
-      ..lineTo(size.width, size.height - 3) // 右辺：上→下
-      ..lineTo(0, size.height - 3) // 下辺：右→左
+      ..moveTo(0, 0) // 左上
+      ..lineTo(size.width, 0) // 上辺：左→右
+      ..lineTo(size.width, size.height) // 右辺：上→下
+      ..lineTo(0, size.height) // 下辺：右→左
       ..close(); // 左辺：下→上（閉じる）
 
     // パスの計測情報を取得
@@ -655,7 +658,7 @@ class NeonPainter extends CustomPainter {
 
     // パスに沿って一定間隔でドットを描画
     for (double distance = 0; distance < totalLength; distance += spacing) {
-      // 現在の距離に対応する座標（Tangent）を取得
+      // 現在の距離に対応する座標を取得
       final tangent = metric.getTangentForOffset(distance);
       if (tangent == null) continue;
       final offset = tangent.position;
@@ -665,7 +668,6 @@ class NeonPainter extends CustomPainter {
 
       // 流れるような点滅ロジック
       // progress(0->1)が増える時、positionRatio(パス上の位置)が追いかけるように不透明度を計算
-      // これで時計回りの回転に見える
       final opacity = ((progress - positionRatio) % 1.0);
       
       // 不透明度が一定以上のドットだけを明るく光らせる（チェイス演出）
