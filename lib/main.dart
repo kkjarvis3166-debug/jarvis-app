@@ -323,21 +323,28 @@ class _ResearchPageState extends State<ResearchPage> {
                 const SizedBox(height: 10),
                 TextField(controller: _reductionPriceController, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], onChanged: (_) => _calc(), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 24), decoration: const InputDecoration(labelText: '状態・欠品による減額', prefixText: '¥ ', prefixStyle: TextStyle(color: Colors.red, fontWeight: FontWeight.bold), labelStyle: TextStyle(color: Colors.red), enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.red, width: 2)))),
                 const SizedBox(height: 15),
-                Row(
-                  children: [
-                    const Text('買取アップ適用：', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const Spacer(),
-                    SizedBox(
-                      width: 120,
-                      child: DropdownButtonFormField<int>(
-                        value: _selectedBonusRate,
-                        items: const [0, 5, 10, 15, 20, 25, 30].map((v) => DropdownMenuItem(value: v, child: Text(v == 0 ? 'なし' : '＋ $v%'))).toList(),
+                
+                // キャンペーン状態に応じたUIの切り替え
+                _isBannerVisible
+                    ? NeonCampaignRow(
+                        selectedBonusRate: _selectedBonusRate,
                         onChanged: (v) { setState(() => _selectedBonusRate = v!); _calc(); },
-                        decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+                      )
+                    : Row(
+                        children: [
+                          const Text('買取アップ適用：', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Spacer(),
+                          SizedBox(
+                            width: 120,
+                            child: DropdownButtonFormField<int>(
+                              value: _selectedBonusRate,
+                              items: const [0, 5, 10, 15, 20, 25, 30].map((v) => DropdownMenuItem(value: v, child: Text(v == 0 ? 'なし' : '＋ $v%'))).toList(),
+                              onChanged: (v) { setState(() => _selectedBonusRate = v!); _calc(); },
+                              decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 15),
                 _resCard(),
                 const SizedBox(height: 15),
@@ -376,6 +383,88 @@ class _ResearchPageState extends State<ResearchPage> {
   );
 
   Widget _profCard(String t, int p, double r, int? f, Color c) => Container(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4), decoration: BoxDecoration(border: Border.all(color: c, width: 2), borderRadius: BorderRadius.circular(6)), child: Column(mainAxisSize: MainAxisSize.max, children: [Text(t, style: TextStyle(color: c, fontWeight: FontWeight.bold, fontSize: 14)), if (f != null) Text('手数料: ¥${_fmt(f)}', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold)), if (f == null) const SizedBox(height: 13.0), Text('¥${_fmt(p)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: c)), Text('粗利率: ${r.toStringAsFixed(1)}%', style: TextStyle(color: c, fontWeight: FontWeight.bold, fontSize: 13))]));
+}
+
+// --- キャンペーン期間中専用の看板風プルダウンUI ---
+class NeonCampaignRow extends StatefulWidget {
+  final int selectedBonusRate;
+  final ValueChanged<int?> onChanged;
+
+  const NeonCampaignRow({super.key, required this.selectedBonusRate, required this.onChanged});
+
+  @override
+  State<NeonCampaignRow> createState() => _NeonCampaignRowState();
+}
+
+class _NeonCampaignRowState extends State<NeonCampaignRow> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.yellowAccent, width: 2),
+        boxShadow: [
+          BoxShadow(color: Colors.yellowAccent.withOpacity(0.3), blurRadius: 4, spreadRadius: 1),
+        ]
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) => CustomPaint(painter: SecureMathPainter(progress: _controller.value)),
+            ),
+          ),
+          Row(
+            children: [
+              const Icon(Icons.star, color: Colors.yellowAccent, size: 20),
+              const SizedBox(width: 4),
+              const Text('買取アップ適用：', style: TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              SizedBox(
+                width: 120,
+                child: Theme(
+                  data: Theme.of(context).copyWith(
+                    canvasColor: Colors.grey[900], // プルダウンメニューの背景色
+                  ),
+                  child: DropdownButtonFormField<int>(
+                    value: widget.selectedBonusRate,
+                    style: const TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold, fontSize: 16),
+                    iconEnabledColor: Colors.yellowAccent,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.yellowAccent)),
+                      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.redAccent)),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ),
+                    items: const [0, 5, 10, 15, 20, 25, 30].map((v) => DropdownMenuItem(value: v, child: Text(v == 0 ? 'なし' : '＋ $v%'))).toList(),
+                    onChanged: widget.onChanged,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class NeonBanner extends StatefulWidget {
