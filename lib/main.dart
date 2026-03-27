@@ -72,7 +72,10 @@ class _ResearchPageState extends State<ResearchPage> {
   @override
   void initState() {
     super.initState();
-    _checkVersionAndAutoReload();
+    // 対策A: デバッグ環境での無限ループ（キャッシュ起因）を回避するため、
+    // バージョンチェック機能を一時的に無効化（コメントアウト）しています。
+    // _checkVersionAndAutoReload(); 
+    
     _loadSettings();
 
     Timer.periodic(const Duration(minutes: 1), (timer) {
