@@ -263,7 +263,12 @@ class _ResearchPageState extends State<ResearchPage> {
         backgroundColor: Colors.blueGrey[50],
         actions: [
           IconButton(icon: const Icon(Icons.settings, size: 18, color: Colors.grey), onPressed: _showAdminAuth),
-          Center(child: Padding(padding: const EdgeInsets.only(right: 16.0), child: Text(kAppVersion, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)))),
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.only(right: 16.0), 
+              child: Text(kAppVersion, style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold))
+            )
+          ),
         ],
       ),
       body: Center(
@@ -275,7 +280,7 @@ class _ResearchPageState extends State<ResearchPage> {
               children: [
                 if (_isBannerVisible)
                   Padding(
-                    padding: const EdgeInsets.bottom(12.0),
+                    padding: const EdgeInsets.only(bottom: 12.0),
                     child: NeonBanner(text: _campaignText, endTime: _campaignEndTime),
                   ),
                 TextField(controller: _searchController, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold), decoration: const InputDecoration(labelText: '商品名を入力', border: OutlineInputBorder())),
