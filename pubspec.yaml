@@ -12,7 +12,6 @@ dependencies:
     sdk: flutter
   url_launcher: ^6.2.0
   intl: ^0.19.0
-  # 【必須】端末への設定保存機能
   shared_preferences: ^2.2.0
 
 dev_dependencies:
